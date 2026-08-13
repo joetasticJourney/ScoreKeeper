@@ -9,6 +9,7 @@
 <title>ScoreKeeper</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button, .pt-btn, .footer-btn, .score-btn, .icon-btn, .lightning-btn, .close-btn { touch-action: manipulation; }
   :root {
     --bg: #0f172a;
     --panel: #1e293b;
@@ -949,11 +950,6 @@ function openConfirm(title, text, onOk) {
 
 // ---------------- Init ----------------
 render();
-
-// Prevent double-tap zoom on iOS on buttons
-document.addEventListener('touchend', (e) => {
-  if (e.target.matches('button, .drag-handle')) e.preventDefault();
-}, { passive: false });
 </script>
 </body>
 </html>
