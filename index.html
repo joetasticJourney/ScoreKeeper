@@ -178,7 +178,7 @@
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 44px;
+    width: calc(44px * var(--row-scale));
     height: calc(44px * var(--row-scale));
     font-size: calc(22px * var(--row-scale));
     font-weight: 800;
@@ -414,9 +414,14 @@
   .confirm-text { padding: 8px; text-align: center; font-size: 16px; }
 
   @media (max-width: 360px) {
-    .score-btn { width: 40px; height: 40px; font-size: 20px; margin: 0 2px; }
-    .score { font-size: 20px; width: 48px; flex: 0 0 48px; }
-    .player-name { font-size: 15px; }
+    .score-btn {
+      width: calc(40px * var(--row-scale));
+      height: calc(40px * var(--row-scale));
+      font-size: calc(20px * var(--row-scale));
+      margin: 0 2px;
+    }
+    .score { font-size: calc(20px * var(--row-scale)); width: 48px; flex: 0 0 48px; }
+    .player-name { font-size: calc(15px * var(--row-scale)); }
     header h1 { font-size: 16px; }
   }
 </style>
