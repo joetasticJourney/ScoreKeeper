@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f172a">
+<title>ScoreKeeper</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --panel-2: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-2: #0ea5e9;
+    --good: #22c55e;
+    --bad: #ef4444;
+    --warn: #f59e0b;
+    --purple: #a855f7;
+    --border: #475569;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    margin: 0; font-size: 18px; font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .header-actions { display: flex; gap: 6px; align-items: center; }
+  .icon-btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 38px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .icon-btn.active { background: var(--accent); color: #001018; border-color: var(--accent); }
+  .icon-btn.danger { background: #7f1d1d; border-color: #991b1b; }
+
+  main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px;
+  }
+  main.dragging { overflow-y: hidden; }
+
+  .point-selector {
+    display: flex; gap: 6px;
+    padding: 8px;
+    background: var(--panel);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+  }
+  .point-selector .label {
+    font-size: 12px; color: var(--muted);
+    margin-right: 4px; font-weight: 600; text-transform: uppercase;
+  }
+  .pt-btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 36px;
+  }
+  .pt-btn.selected { background: var(--accent); color: #001018; border-color: #fff; }
+
+  .players { list-style: none; margin: 0; padding: 0; }
+  .player {
+    display: flex; align-items: stretch;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    overflow: hidden;
+    touch-action: pan-y;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  .player.dragging {
+    opacity: 0.85;
+    background: var(--panel-2);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    z-index: 100;
+    position: relative;
+  }
+  .player.drop-target-above { border-top: 3px solid var(--accent); }
+  .player.drop-target-below { border-bottom: 3px solid var(--accent); }
+
+  .drag-handle {
+    width: 32px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--panel-2);
+    color: var(--muted);
+    cursor: grab;
+    font-size: 18px;
+    user-select: none;
+    touch-action: none;
+    flex-shrink: 0;
+  }
+  .drag-handle:active { cursor: grabbing; }
+  .locked .drag-handle { display: none; }
+
+  .player-body {
+    flex: 1;
+    display: flex; align-items: center;
+    padding: 8px 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+  .player-name {
+    flex: 1;
+    background: transparent;
+    color: var(--text);
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 6px 4px;
+    min-width: 0;
+    outline: none;
+    border-radius: 4px;
+  }
+  .player-name:focus { background: rgba(255,255,255,0.08); }
+  .locked .player-name { pointer-events: none; }
+
+  .score {
+    font-size: 22px; font-weight: 800;
+    width: 56px;
+    flex: 0 0 56px;
+    text-align: center;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    overflow: visible;
+    white-space: nowrap;
+  }
+  .score.negative { color: var(--bad); }
+
+  .score-btn {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: 44px; height: 44px;
+    font-size: 22px; font-weight: 800;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin: 0 4px;
+  }
+  .score-btn.plus { background: var(--good); border-color: var(--good); color: #04240e; }
+  .score-btn.minus { background: var(--bad); border-color: var(--bad); color: #2b0606; }
+  .score-btn:active { transform: scale(0.92); }
+
+  footer {
+    display: flex; gap: 6px;
+    padding: 8px;
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .footer-btn {
+    flex: 1;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: 48px;
+  }
+  .footer-btn.primary { background: var(--purple); border-color: var(--purple); }
+  .footer-btn.secondary { background: var(--accent-2); border-color: var(--accent-2); }
+  .footer-btn.warn { background: var(--warn); border-color: var(--warn); color: #2a1a00; }
+  .footer-btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+
+  .settings-list { display: flex; flex-direction: column; gap: 10px; }
+  .settings-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px;
+    background: var(--panel-2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .settings-info { flex: 1; min-width: 0; }
+  .settings-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+  .settings-desc { font-size: 13px; color: var(--muted); }
+  .settings-row .footer-btn { flex: 0 0 auto; min-width: 84px; padding: 10px 14px; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 1000;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 16px;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal-backdrop.open { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    background: var(--panel);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; }
+  .modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 8px;
+  }
+  .close-btn {
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1;
+  }
+
+  /* Rankings */
+  .rankings-list { list-style: none; margin: 0; padding: 0; }
+  .rank-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rank-item:last-child { border-bottom: none; }
+  .rank-pos {
+    font-size: 20px; font-weight: 800;
+    min-width: 40px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .rank-item.top-1 .rank-pos { color: #fbbf24; }
+  .rank-item.top-2 .rank-pos { color: #cbd5e1; }
+  .rank-item.top-3 .rank-pos { color: #d97706; }
+  .rank-name { flex: 1; font-weight: 600; font-size: 16px; }
+  .rank-score { font-size: 20px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+  /* Lightning mode */
+  .lightning-stage {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 16px;
+    gap: 20px;
+    min-height: 320px;
+  }
+  .lightning-progress {
+    display: flex; gap: 4px;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .prog-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--panel-2);
+  }
+  .prog-dot.done-correct { background: var(--good); }
+  .prog-dot.done-incorrect { background: var(--bad); }
+  .prog-dot.current {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px rgba(56,189,248,0.3);
+  }
+  .lightning-player-name {
+    font-size: 32px;
+    font-weight: 800;
+    text-align: center;
+    padding: 24px 12px;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .lightning-points {
+    font-size: 16px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .lightning-points strong {
+    color: var(--accent);
+    font-size: 24px;
+    display: block;
+    margin-top: 4px;
+  }
+  .lightning-actions {
+    display: flex; gap: 10px;
+    width: 100%;
+    margin-top: auto;
+  }
+  .lightning-btn {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    padding: 20px 12px;
+    font-size: 20px;
+    font-weight: 800;
+    cursor: pointer;
+    color: white;
+    min-height: 72px;
+  }
+  .lightning-btn.correct { background: var(--good); color: #04240e; }
+  .lightning-btn.incorrect { background: var(--bad); color: #2b0606; }
+  .lightning-btn:active { transform: scale(0.96); }
+
+  .lightning-setup {
+    display: flex; flex-direction: column; gap: 16px;
+    padding: 8px;
+  }
+  .setup-label { font-weight: 600; color: var(--muted); font-size: 14px; text-transform: uppercase; }
+  .setup-points {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    justify-content: center;
+  }
+  .setup-points .pt-btn { min-width: 56px; min-height: 44px; font-size: 18px; }
+
+  .lightning-complete {
+    text-align: center;
+    padding: 20px;
+  }
+  .lightning-complete h3 { margin: 0 0 12px 0; font-size: 22px; }
+  .summary-list { list-style: none; padding: 0; margin: 12px 0; text-align: left; }
+  .summary-list li {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+  }
+  .summary-list .summary-correct { color: var(--good); }
+  .summary-list .summary-incorrect { color: var(--bad); }
+
+  /* Confirm dialog */
+  .confirm-text { padding: 8px; text-align: center; font-size: 16px; }
+
+  @media (max-width: 360px) {
+    .score-btn { width: 40px; height: 40px; font-size: 20px; margin: 0 2px; }
+    .score { font-size: 20px; width: 48px; flex: 0 0 48px; }
+    .player-name { font-size: 15px; }
+    header h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ScoreKeeper</h1>
+  <div class="header-actions">
+    <button id="lockToggle" class="icon-btn" title="Lock reorder & names">🔓 Unlocked</button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="point-selector" id="pointSelector">
+    <span class="label">Points:</span>
+    <button class="pt-btn" data-pts="1">1</button>
+    <button class="pt-btn selected" data-pts="2">2</button>
+    <button class="pt-btn" data-pts="3">3</button>
+    <button class="pt-btn" data-pts="5">5</button>
+    <button class="pt-btn" data-pts="10">10</button>
+  </div>
+  <ul class="players" id="playerList"></ul>
+</main>
+
+<footer>
+  <button class="footer-btn primary" id="lightningBtn">⚡ Lightning</button>
+  <button class="footer-btn secondary" id="rankingsBtn">🏆 Rankings</button>
+  <button class="footer-btn" id="settingsBtn">⚙ Settings</button>
+</footer>
+
+<!-- Rankings modal -->
+<div class="modal-backdrop" id="rankingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>🏆 Rankings</h2>
+      <button class="close-btn" data-close="rankingsModal">×</button>
+    </div>
+    <div class="modal-body">
+      <ol class="rankings-list" id="rankingsList"></ol>
+    </div>
+  </div>
+</div>
+
+<!-- Lightning modal -->
+<div class="modal-backdrop" id="lightningModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚡ Lightning Round</h2>
+      <button class="close-btn" data-close="lightningModal">×</button>
+    </div>
+    <div class="modal-body" id="lightningBody"></div>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settingsModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>⚙ Settings</h2>
+      <button class="close-btn" data-close="settingsModal">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-list">
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-title">Clear all points</div>
+            <div class="settings-desc">Reset every player's score to 0. Names and order are kept.</div>
+          </div>
+          <button class="footer-btn warn" id="clearPointsBtn">Clear</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-title">Clear player names</div>
+            <div class="settings-desc">Reset names to "Player 1" – "Player 12". Scores and order are kept.</div>
+          </div>
+          <button class="footer-btn warn" id="clearNamesBtn">Clear</button>
+        </div>
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="settings-title">Reset everything</div>
+            <div class="settings-desc">Clear scores, names, and order back to defaults.</div>
+          </div>
+          <button class="footer-btn danger" id="clearAllBtn">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="confirmTitle">Confirm</h2>
+      <button class="close-btn" data-close="confirmModal">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="confirm-text" id="confirmText"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="footer-btn" id="confirmCancel">Cancel</button>
+      <button class="footer-btn warn" id="confirmOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const STORAGE_KEY = 'scorekeeper.v1';
+const POINT_VALUES = [1, 2, 3, 5, 10];
+const NUM_PLAYERS = 12;
+
+const defaultState = () => ({
+  players: Array.from({ length: NUM_PLAYERS }, (_, i) => ({
+    id: 'p' + i,
+    name: 'Player ' + (i + 1),
+    score: 0
+  })),
+  locked: false,
+  selectedPoints: 2
+});
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    if (!parsed.players || parsed.players.length !== NUM_PLAYERS) return defaultState();
+    return { ...defaultState(), ...parsed };
+  } catch (e) {
+    return defaultState();
+  }
+}
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+// ---------------- Rendering ----------------
+const listEl = document.getElementById('playerList');
+const lockBtn = document.getElementById('lockToggle');
+const pointSelector = document.getElementById('pointSelector');
+
+function render() {
+  listEl.innerHTML = '';
+  listEl.classList.toggle('locked', state.locked);
+  for (const p of state.players) {
+    listEl.appendChild(playerRow(p));
+  }
+  lockBtn.textContent = state.locked ? '🔒 Locked' : '🔓 Unlocked';
+  lockBtn.classList.toggle('active', state.locked);
+
+  for (const btn of pointSelector.querySelectorAll('.pt-btn')) {
+    btn.classList.toggle('selected', Number(btn.dataset.pts) === state.selectedPoints);
+  }
+}
+
+function playerRow(p) {
+  const li = document.createElement('li');
+  li.className = 'player';
+  li.dataset.id = p.id;
+
+  const handle = document.createElement('div');
+  handle.className = 'drag-handle';
+  handle.textContent = '☰';
+  handle.setAttribute('aria-label', 'Drag to reorder');
+  li.appendChild(handle);
+
+  const body = document.createElement('div');
+  body.className = 'player-body';
+
+  const nameInput = document.createElement('input');
+  nameInput.className = 'player-name';
+  nameInput.type = 'text';
+  nameInput.value = p.name;
+  nameInput.maxLength = 24;
+  nameInput.addEventListener('input', () => {
+    p.name = nameInput.value;
+    save();
+  });
+  nameInput.addEventListener('focus', () => nameInput.select());
+  body.appendChild(nameInput);
+
+  const scoreEl = document.createElement('div');
+  scoreEl.className = 'score';
+  updateScoreDisplay(scoreEl, p.score);
+
+  const plus = document.createElement('button');
+  plus.className = 'score-btn plus';
+  plus.textContent = '+';
+  plus.setAttribute('aria-label', 'Add');
+  plus.addEventListener('click', (e) => {
+    e.stopPropagation();
+    p.score += state.selectedPoints;
+    updateScoreDisplay(scoreEl, p.score);
+    save();
+  });
+
+  const minus = document.createElement('button');
+  minus.className = 'score-btn minus';
+  minus.textContent = '−';
+  minus.setAttribute('aria-label', 'Subtract');
+  minus.addEventListener('click', (e) => {
+    e.stopPropagation();
+    p.score -= state.selectedPoints;
+    updateScoreDisplay(scoreEl, p.score);
+    save();
+  });
+
+  body.appendChild(plus);
+  body.appendChild(scoreEl);
+  body.appendChild(minus);
+
+  li.appendChild(body);
+
+  attachDrag(li, handle);
+  return li;
+}
+
+function updateScoreDisplay(el, score) {
+  el.textContent = String(score);
+  el.classList.toggle('negative', score < 0);
+}
+
+// ---------------- Drag & drop (pointer-based, works on touch + mouse) ----------------
+let drag = null;
+
+function attachDrag(li, handle) {
+  handle.addEventListener('pointerdown', (e) => {
+    if (state.locked) return;
+    e.preventDefault();
+    startDrag(li, e);
+  });
+}
+
+function startDrag(li, e) {
+  const rect = li.getBoundingClientRect();
+  drag = {
+    el: li,
+    id: li.dataset.id,
+    startY: e.clientY,
+    offsetY: e.clientY - rect.top,
+    height: rect.height,
+    origIndex: state.players.findIndex(p => p.id === li.dataset.id),
+    currentIndex: -1,
+    pointerId: e.pointerId
+  };
+  drag.currentIndex = drag.origIndex;
+
+  li.classList.add('dragging');
+  li.style.width = rect.width + 'px';
+  document.getElementById('main').classList.add('dragging');
+
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', onDragEnd);
+  document.addEventListener('pointercancel', onDragEnd);
+}
+
+function onDragMove(e) {
+  if (!drag) return;
+  e.preventDefault();
+
+  const mainEl = document.getElementById('main');
+  const mainRect = mainEl.getBoundingClientRect();
+
+  // Auto-scroll near edges
+  const edgeSize = 60;
+  if (e.clientY < mainRect.top + edgeSize) {
+    mainEl.scrollTop -= Math.max(1, (mainRect.top + edgeSize - e.clientY) / 8);
+  } else if (e.clientY > mainRect.bottom - edgeSize) {
+    mainEl.scrollTop += Math.max(1, (e.clientY - (mainRect.bottom - edgeSize)) / 8);
+  }
+
+  // Move the dragging element visually
+  const listRect = listEl.getBoundingClientRect();
+  const relY = e.clientY - listRect.top - drag.offsetY;
+  drag.el.style.transform = `translateY(${relY - drag.el.offsetTop}px)`;
+
+  // Determine new index by hit testing over other rows
+  const rows = Array.from(listEl.querySelectorAll('.player'));
+  let newIndex = drag.currentIndex;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row === drag.el) continue;
+    const r = row.getBoundingClientRect();
+    const mid = r.top + r.height / 2;
+    if (e.clientY < mid) {
+      newIndex = i > drag.currentIndex ? i - 1 : i;
+      break;
+    }
+    newIndex = i > drag.currentIndex ? i : i + 1;
+  }
+  newIndex = Math.max(0, Math.min(state.players.length - 1, newIndex));
+
+  if (newIndex !== drag.currentIndex) {
+    // Reorder DOM optimistically without re-render (keeps drag element attached)
+    const cur = drag.currentIndex;
+    const [moved] = state.players.splice(cur, 1);
+    state.players.splice(newIndex, 0, moved);
+    drag.currentIndex = newIndex;
+
+    // Reinsert DOM node at correct position
+    const draggingEl = drag.el;
+    const target = rows[newIndex] === draggingEl ? null : rows[newIndex];
+    if (target) {
+      if (newIndex > cur) {
+        target.after(draggingEl);
+      } else {
+        target.before(draggingEl);
+      }
+    }
+
+    // Recompute transform offset since offsetTop changed
+    const listRect2 = listEl.getBoundingClientRect();
+    const relY2 = e.clientY - listRect2.top - drag.offsetY;
+    draggingEl.style.transform = `translateY(${relY2 - draggingEl.offsetTop}px)`;
+  }
+}
+
+function onDragEnd() {
+  if (!drag) return;
+  drag.el.style.transform = '';
+  drag.el.style.width = '';
+  drag.el.classList.remove('dragging');
+  document.getElementById('main').classList.remove('dragging');
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
+  document.removeEventListener('pointercancel', onDragEnd);
+  drag = null;
+  save();
+}
+
+// ---------------- Header / point selector ----------------
+lockBtn.addEventListener('click', () => {
+  state.locked = !state.locked;
+  save();
+  render();
+});
+
+pointSelector.addEventListener('click', (e) => {
+  const btn = e.target.closest('.pt-btn');
+  if (!btn) return;
+  state.selectedPoints = Number(btn.dataset.pts);
+  save();
+  for (const b of pointSelector.querySelectorAll('.pt-btn')) {
+    b.classList.toggle('selected', b === btn);
+  }
+});
+
+// ---------------- Modals ----------------
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click', (e) => {
+  const c = e.target.closest('[data-close]');
+  if (c) closeModal(c.dataset.close);
+  if (e.target.classList.contains('modal-backdrop')) {
+    // Don't close lightning mid-round on backdrop tap
+    if (e.target.id === 'lightningModal' && lightning && lightning.active) return;
+    e.target.classList.remove('open');
+  }
+});
+
+// ---------------- Rankings ----------------
+document.getElementById('rankingsBtn').addEventListener('click', () => {
+  const list = document.getElementById('rankingsList');
+  list.innerHTML = '';
+  const ranked = [...state.players].sort((a, b) => b.score - a.score);
+  ranked.forEach((p, i) => {
+    const li = document.createElement('li');
+    li.className = 'rank-item';
+    if (i === 0) li.classList.add('top-1');
+    else if (i === 1) li.classList.add('top-2');
+    else if (i === 2) li.classList.add('top-3');
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+    li.innerHTML = `
+      <div class="rank-pos">${medal}</div>
+      <div class="rank-name"></div>
+      <div class="rank-score"></div>
+    `;
+    li.querySelector('.rank-name').textContent = p.name;
+    li.querySelector('.rank-score').textContent = p.score;
+    list.appendChild(li);
+  });
+  openModal('rankingsModal');
+});
+
+// ---------------- Lightning mode ----------------
+let lightning = null;
+
+document.getElementById('lightningBtn').addEventListener('click', () => {
+  lightning = { active: false, points: state.selectedPoints, queue: [], index: 0, results: [] };
+  renderLightningSetup();
+  openModal('lightningModal');
+});
+
+function renderLightningSetup() {
+  const body = document.getElementById('lightningBody');
+  body.innerHTML = `
+    <div class="lightning-setup">
+      <div class="setup-label">Point value for this round</div>
+      <div class="setup-points" id="setupPts"></div>
+      <div class="setup-label" style="margin-top: 12px;">Order</div>
+      <div style="color: var(--muted); font-size: 14px; text-align: center;">
+        Players will be prompted in the current list order (${state.players.length} players).
+      </div>
+      <button class="footer-btn primary" id="startLightning" style="margin-top: 12px;">Start Round ⚡</button>
+    </div>
+  `;
+  const ptsWrap = body.querySelector('#setupPts');
+  for (const v of POINT_VALUES) {
+    const b = document.createElement('button');
+    b.className = 'pt-btn' + (v === lightning.points ? ' selected' : '');
+    b.textContent = v;
+    b.addEventListener('click', () => {
+      lightning.points = v;
+      for (const x of ptsWrap.querySelectorAll('.pt-btn')) {
+        x.classList.toggle('selected', x === b);
+      }
+    });
+    ptsWrap.appendChild(b);
+  }
+  body.querySelector('#startLightning').addEventListener('click', startLightning);
+}
+
+function startLightning() {
+  lightning.queue = state.players.map(p => p.id);
+  lightning.index = 0;
+  lightning.results = [];
+  lightning.active = true;
+  renderLightningStep();
+}
+
+function renderLightningStep() {
+  const body = document.getElementById('lightningBody');
+  if (lightning.index >= lightning.queue.length) {
+    renderLightningComplete();
+    return;
+  }
+  const pid = lightning.queue[lightning.index];
+  const player = state.players.find(p => p.id === pid);
+  const total = lightning.queue.length;
+
+  let dots = '';
+  for (let i = 0; i < total; i++) {
+    let cls = 'prog-dot';
+    if (i < lightning.index) {
+      cls += lightning.results[i] ? ' done-correct' : ' done-incorrect';
+    } else if (i === lightning.index) {
+      cls += ' current';
+    }
+    dots += `<div class="${cls}"></div>`;
+  }
+
+  body.innerHTML = `
+    <div class="lightning-stage">
+      <div class="lightning-progress">${dots}</div>
+      <div class="lightning-points">Player ${lightning.index + 1} of ${total}<strong>±${lightning.points} pts</strong></div>
+      <div class="lightning-player-name"></div>
+      <div class="lightning-actions">
+        <button class="lightning-btn incorrect" id="btnIncorrect">✗ Incorrect<br><span style="font-size:14px;font-weight:600;opacity:0.8;">+0</span></button>
+        <button class="lightning-btn correct" id="btnCorrect">✓ Correct<br><span style="font-size:14px;font-weight:600;opacity:0.8;">+${lightning.points}</span></button>
+      </div>
+    </div>
+  `;
+  body.querySelector('.lightning-player-name').textContent = player.name;
+  body.querySelector('#btnCorrect').addEventListener('click', () => answerLightning(true));
+  body.querySelector('#btnIncorrect').addEventListener('click', () => answerLightning(false));
+}
+
+function answerLightning(correct) {
+  const pid = lightning.queue[lightning.index];
+  const player = state.players.find(p => p.id === pid);
+  if (correct) player.score += lightning.points;
+  lightning.results.push(correct);
+  lightning.index++;
+  save();
+  render();
+  renderLightningStep();
+}
+
+function renderLightningComplete() {
+  lightning.active = false;
+  const body = document.getElementById('lightningBody');
+  let rows = '';
+  for (let i = 0; i < lightning.queue.length; i++) {
+    const p = state.players.find(x => x.id === lightning.queue[i]);
+    const ok = lightning.results[i];
+    rows += `<li><span></span><span class="${ok ? 'summary-correct' : 'summary-incorrect'}">${ok ? '+' + lightning.points : '+0'}</span></li>`;
+  }
+  body.innerHTML = `
+    <div class="lightning-complete">
+      <h3>Round Complete! ⚡</h3>
+      <ul class="summary-list" id="summaryList"></ul>
+      <button class="footer-btn primary" id="againBtn" style="margin-top: 12px;">New Round</button>
+      <button class="footer-btn" data-close="lightningModal" style="margin-top: 8px;">Close</button>
+    </div>
+  `;
+  const ul = body.querySelector('#summaryList');
+  ul.innerHTML = rows;
+  const nameSpans = ul.querySelectorAll('li > span:first-child');
+  for (let i = 0; i < lightning.queue.length; i++) {
+    const p = state.players.find(x => x.id === lightning.queue[i]);
+    nameSpans[i].textContent = p.name;
+  }
+  body.querySelector('#againBtn').addEventListener('click', () => {
+    lightning = { active: false, points: lightning.points, queue: [], index: 0, results: [] };
+    renderLightningSetup();
+  });
+}
+
+// ---------------- Settings ----------------
+document.getElementById('settingsBtn').addEventListener('click', () => {
+  openModal('settingsModal');
+});
+
+document.getElementById('clearPointsBtn').addEventListener('click', () => {
+  openConfirm('Clear all points?', 'Every player\'s score will be reset to 0.', () => {
+    for (const p of state.players) p.score = 0;
+    save();
+    render();
+    closeModal('settingsModal');
+  });
+});
+
+document.getElementById('clearNamesBtn').addEventListener('click', () => {
+  openConfirm('Clear player names?', 'Names will be reset to "Player 1" – "Player 12".', () => {
+    state.players.forEach((p, i) => { p.name = 'Player ' + (i + 1); });
+    save();
+    render();
+    closeModal('settingsModal');
+  });
+});
+
+document.getElementById('clearAllBtn').addEventListener('click', () => {
+  openConfirm('Reset everything?', 'Scores, names, and order will all return to defaults.', () => {
+    state = defaultState();
+    save();
+    render();
+    closeModal('settingsModal');
+  });
+});
+
+function openConfirm(title, text, onOk) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmText').textContent = text;
+  const okBtn = document.getElementById('confirmOk');
+  const cancelBtn = document.getElementById('confirmCancel');
+  const clean = () => {
+    okBtn.removeEventListener('click', okHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+    closeModal('confirmModal');
+  };
+  const okHandler = () => { onOk(); clean(); };
+  const cancelHandler = () => clean();
+  okBtn.addEventListener('click', okHandler);
+  cancelBtn.addEventListener('click', cancelHandler);
+  openModal('confirmModal');
+}
+
+// ---------------- Init ----------------
+render();
+
+// Prevent double-tap zoom on iOS on buttons
+document.addEventListener('touchend', (e) => {
+  if (e.target.matches('button, .drag-handle')) e.preventDefault();
+}, { passive: false });
+</script>
+</body>
+</html>
